@@ -3,7 +3,7 @@ name: reflex-sdk-builder
 description: Build robotics applications on top of the Reflex Labs API using the Python SDK. Use when the user wants to fine-tune pi0.5 or VLA policies, run inference for robot control, register HuggingFace LeRobot datasets, drive an SO-101 arm, or wire any Reflex-hosted model into their robot stack. Triggers on "reflex sdk", "reflex api", "tryreflex", "fine-tune pi0.5", "lora finetune", "robot inference", "VLA inference", "lerobot training", "SO-101 control", or imports of `reflex` (the Reflex Labs SDK, not the Reflex UI framework).
 metadata:
   author: reflex-inc
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Build with the Reflex SDK
@@ -117,7 +117,31 @@ while True:
     time.sleep(5)
 ```
 
-When training succeeds, the adapter is saved to your account. To make YOUR adapter the one served by the inference endpoint for your key, use the dashboard or contact support — by default the platform serves a shared base adapter.
+### What training actually does
+
+Customer training is **real LoRA fine-tuning** of `pi0.5` on the user's
+HuggingFace LeRobot dataset. The worker (`reflex-training-modal.train_real_lora_b200`)
+shells out to `lerobot-train` on a managed B200 GPU, honoring the user's
+`lora_rank`, `target_modules`, `learning_rate`, `batch_size`,
+`max_steps`, `warmup_steps`, and the rest of the advanced params.
+
+Typical wall time on a small dataset:
+
+- 5 steps:  ~65–110s (cold-start + boot)
+- 30 steps: ~90–120s
+- 200 steps: ~3–5 min
+
+The adapter lands at
+`/vol/real_runs/<run_id>_<timestamp>/checkpoints/<step>/pretrained_model/adapter_model.safetensors`.
+Verify by polling `client.training.get(run_id)` — the
+`modalAdapterPath` field on the trainingRun row contains that path
+prefix. A path containing `tiny_trained_adapter` means the run used the
+internal synthetic smoke recipe (opt-in via `parameters.use_synthetic=true`,
+not customer-facing).
+
+To make YOUR adapter the one served by the inference endpoint for your
+key, use the dashboard or contact support — by default the platform
+serves a shared base adapter.
 
 ## Inference — POST observations, get action chunks
 
