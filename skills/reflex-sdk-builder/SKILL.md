@@ -3,7 +3,7 @@ name: reflex-sdk-builder
 description: Build robotics applications on top of the Reflex Labs API using the Python SDK. Use when the user wants to fine-tune pi0.5 or VLA policies, run inference for robot control, register HuggingFace LeRobot datasets, drive an SO-101 arm, or wire any Reflex-hosted model into their robot stack. Triggers on "reflex sdk", "reflex api", "tryreflex", "fine-tune pi0.5", "lora finetune", "robot inference", "VLA inference", "lerobot training", "SO-101 control", or imports of `reflex` (the Reflex Labs SDK, not the Reflex UI framework).
 metadata:
   author: reflex-inc
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Build with the Reflex SDK
@@ -69,6 +69,38 @@ run_id = (result.get("trainingRunId")
           or result.get("run_id"))
 print("run:", run_id, "→ https://app.tryreflex.ai/training-jobs/" + run_id)
 ```
+
+### Advanced training parameters (SDK 0.2.0+)
+
+Eight additional knobs ship with `reflex-sdk>=0.2.0`. All are optional;
+omit to use server defaults. All are server-side validated — out-of-bounds
+values are rejected before any GPU is provisioned.
+
+```python
+result = client.training.lora_finetune(
+    hf_source_uri="lerobot/aloha_sim_transfer_cube_human",
+    epochs=1,
+    # LoRA shape
+    lora_rank=16,                                      # {4, 8, 16, 32, 64}
+    lora_alpha=32,                                     # [1, 256]
+    lora_dropout=0.05,                                 # [0.0, 0.5]
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],  # whitelist
+    # Optimizer schedule
+    warmup_steps=200,                                  # [0, max_steps/2]
+    # Compute / memory
+    gradient_checkpointing=True,                       # cuts ~40% GPU mem
+    dtype="bfloat16",                                  # {"bfloat16", "float32"}
+    # VLA-specific
+    freeze_vision_encoder=True,                        # default for transfer
+    # Checkpointing cadence
+    save_freq=500,                                     # [50, max_steps]
+)
+```
+
+`target_modules` whitelist for pi0.5: `q_proj`, `k_proj`, `v_proj`, `o_proj`,
+`gate_proj`, `up_proj`, `down_proj`, `action_in_proj`, `action_out_proj`.
+LoRA-only kwargs (`lora_rank/alpha/dropout/target_modules`) are rejected on
+`full_finetune`.
 
 Poll status (status moves `queued → provisioning → running → succeeded`; full pi0.5 LoRA runs ~3–5 min on the managed GPU):
 
